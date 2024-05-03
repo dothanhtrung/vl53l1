@@ -1,6 +1,6 @@
 [package]
 name = "vl53l1-reg"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["mitchmindtree <mitchell.nordine@gmail.com>"]
 description = "A crate for low-level access to the registers on the VL53L1X."
 readme = "../../README.md"
@@ -12,4 +12,4 @@ edition = "2018"
 
 [dependencies]
 bitfield = "0.14"
-embedded-hal = "0.2.4"
+embedded-hal = "1.0.0"

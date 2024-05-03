@@ -24,7 +24,7 @@ mod map;
 pub mod settings;
 pub mod structs;
 
-use embedded_hal::blocking::i2c;
+use embedded_hal::i2c::I2c;
 pub use map::*;
 pub use structs::Entries;
 
@@ -60,7 +60,7 @@ pub const SLAVE_ADDR: u8 = 0x52 >> 1;
 /// **Panic**s if `slice.len()` is greater than `MAX_SLICE_LEN`.
 pub fn write_slice<I>(i2c: &mut I, index: Index, slice: &[u8]) -> Result<(), I::Error>
 where
-    I: i2c::Write,
+    I: I2c,
 {
     assert!(slice.len() < MAX_SLICE_LEN);
     let mut data = [0u8; DATA_LEN];
@@ -89,7 +89,7 @@ where
 /// read.
 pub fn read_slice<I>(i2c: &mut I, index: Index, slice: &mut [u8]) -> Result<(), I::Error>
 where
-    I: i2c::WriteRead,
+    I: I2c,
 {
     let arr: [u8; 2] = index.into();
     i2c.write_read(SLAVE_ADDR, &arr, slice)
@@ -98,7 +98,7 @@ where
 /// Shorthand for writing a slice with a single byte.
 pub fn write_byte<I>(i2c: &mut I, index: Index, byte: u8) -> Result<(), I::Error>
 where
-    I: i2c::Write,
+    I: I2c,
 {
     write_slice(i2c, index, &[byte])
 }
@@ -106,7 +106,7 @@ where
 /// Shorthand for reading a single byte from the register at the given index.
 pub fn read_byte<I>(i2c: &mut I, index: Index) -> Result<u8, I::Error>
 where
-    I: i2c::WriteRead,
+    I: I2c,
 {
     let mut b = [0u8];
     read_slice(i2c, index, &mut b)?;
@@ -117,7 +117,7 @@ where
 /// Shorthand for writing a slice with a single word.
 pub fn write_word<I>(i2c: &mut I, index: Index, word: u16) -> Result<(), I::Error>
 where
-    I: i2c::Write,
+    I: I2c,
 {
     let [a, b] = word.to_be_bytes();
     write_slice(i2c, index, &[a, b])
@@ -126,7 +126,7 @@ where
 /// Shorthand for reading two consecutive bytes from the given index.
 pub fn read_word<I>(i2c: &mut I, index: Index) -> Result<u16, I::Error>
 where
-    I: i2c::WriteRead,
+    I: I2c,
 {
     let mut bs = [0u8; 2];
     read_slice(i2c, index, &mut bs)?;
@@ -136,7 +136,7 @@ where
 /// Read the the given entry.
 pub fn write_entry<I, E>(i2c: &mut I, entry: E) -> Result<(), I::Error>
 where
-    I: i2c::Write,
+    I: I2c,
     E: Entry,
 {
     let arr = entry.into_array();
@@ -146,7 +146,7 @@ where
 /// Read the value for a single entry.
 pub fn read_entry<I, E>(i2c: &mut I) -> Result<E, I::Error>
 where
-    I: i2c::WriteRead,
+    I: I2c,
     E: Entry,
 {
     let mut arr: E::Array = Default::default();

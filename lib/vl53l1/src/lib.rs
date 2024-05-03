@@ -20,10 +20,7 @@ mod preset_mode;
 mod tuningparm;
 
 use core::convert::TryFrom;
-use embedded_hal::blocking::{
-    delay::{DelayMs, DelayUs},
-    i2c,
-};
+use embedded_hal::{delay::DelayNs, i2c::I2c};
 use reg::{structs::Entries, Entry};
 
 pub use self::reg::{
@@ -35,8 +32,8 @@ pub use tuningparm::TuningParm;
 pub use vl53l1_reg as reg;
 
 /// The set of all delays required by the API.
-pub trait Delay: DelayUs<u32> + DelayMs<u32> {}
-impl<T> Delay for T where T: DelayUs<u32> + DelayMs<u32> {}
+pub trait Delay: DelayNs {}
+impl<T> Delay for T where T: DelayNs {}
 
 /// The delay duration when resetting the software.
 pub const SOFTWARE_RESET_DURATION: u8 = 100;
@@ -1114,7 +1111,7 @@ pub fn clear_interrupt_and_start_measurement<I, D, E>(
     delay: &mut D,
 ) -> Result<(), Error<E>>
 where
-    I: i2c::Write<Error = E> + i2c::WriteRead<Error = E>,
+    I: I2c<Error = E>,
     D: Delay,
 {
     let device_measurement_mode = dev.data.ll.measurement_mode;
@@ -1133,7 +1130,7 @@ where
 /// It is called **once and only once** after the device is brought out of reset.
 pub fn data_init<I, E>(dev: &mut Device, i2c: &mut I) -> Result<(), Error<E>>
 where
-    I: i2c::Write<Error = E> + i2c::WriteRead<Error = E>,
+    I: I2c<Error = E>,
 {
     let mut b = read_byte(i2c, reg::Index::PAD_I2C_HV__EXTSUP_CONFIG).map_err(Error::I2c)?;
     b = (b & 0xFE) | 0x01;
@@ -1245,7 +1242,7 @@ pub fn get_ranging_measurement_data<I>(
     i2c: &mut I,
 ) -> Result<RangingMeasurementData, Error<I::Error>>
 where
-    I: i2c::WriteRead,
+    I: I2c,
 {
     let mut rmd = RangingMeasurementData::default();
 
@@ -1281,7 +1278,7 @@ pub fn perform_ref_spad_management<I, D, E>(
     delay: &mut D,
 ) -> nb::Result<Outcome<()>, Error<E>>
 where
-    I: i2c::Write<Error = E> + i2c::WriteRead<Error = E>,
+    I: I2c<Error = E>,
     D: Delay,
 {
     let preset_mode = dev.data.current_parameters.preset_mode;
@@ -1426,7 +1423,7 @@ pub fn set_xtalk_compensation_enable<I>(
     xtalk_compensation_enable: u8,
 ) -> Result<(), I::Error>
 where
-    I: i2c::Write,
+    I: I2c,
 {
     if xtalk_compensation_enable == 0 {
         disable_xtalk_compensation(dev, i2c)?;
@@ -1446,8 +1443,7 @@ where
 /// Returns `Err(WouldBlock)` if the `boot_timeout_ms` is exceeded.
 pub fn software_reset<I, E, D>(dev: &mut Device, i2c: &mut I, d: &mut D) -> nb::Result<(), E>
 where
-    I: i2c::WriteRead<Error = E>,
-    I: i2c::Write<Error = E>,
+    I: I2c<Error = E>,
     D: Delay,
 {
     write_byte(i2c, reg::SOFT_RESET::INDEX, 0x00)?;
@@ -1465,7 +1461,7 @@ where
 /// Must be called to start a measurement.
 pub fn start_measurement<I>(dev: &mut Device, i2c: &mut I) -> Result<(), Error<I::Error>>
 where
-    I: i2c::Write,
+    I: I2c,
 {
     const TIMED_MODE_TIMING_GUARD_MILLISECONDS: u32 = 4;
 
@@ -1498,7 +1494,7 @@ where
 /// If called during a range measurement, the measurement is aborted immediately.
 pub fn stop_measurement<I>(dev: &mut Device, i2c: &mut I) -> Result<(), Error<I::Error>>
 where
-    I: i2c::Write,
+    I: I2c,
 {
     stop_range(dev, i2c).map_err(Error::I2c)?;
     dev.data.pal_state = State::Idle;
@@ -1531,7 +1527,7 @@ pub fn wait_measurement_data_ready<I, D, E>(
     delay: &mut D,
 ) -> nb::Result<(), E>
 where
-    I: i2c::Write<Error = E> + i2c::WriteRead<Error = E>,
+    I: I2c<Error = E>,
     D: Delay,
 {
     poll_for_range_completion(dev, i2c, delay, config::RANGE_COMPLETION_POLLING_TIMEOUT_MS)
@@ -1542,7 +1538,7 @@ where
 /// Currently a very simple function to clear customer xtalk parms and apply to device.
 fn disable_xtalk_compensation<I>(dev: &mut Device, i2c: &mut I) -> Result<(), I::Error>
 where
-    I: i2c::Write,
+    I: I2c,
 {
     // Fill Public customer NVM data with Xtalk parms.
     dev.data
@@ -1590,7 +1586,7 @@ fn calc_crosstalk_plane_offset_with_margin(plane_offset_kcps: u32, margin_offset
 /// device.
 fn enable_xtalk_compensation<I>(dev: &mut Device, i2c: &mut I) -> Result<(), I::Error>
 where
-    I: i2c::Write,
+    I: I2c,
 {
     // Fill Public customer NVM data with Xtalk parms.
     let mut temp: u32 = calc_crosstalk_plane_offset_with_margin(
@@ -1670,14 +1666,14 @@ macro_rules! set_entry {
 
 fn disable_firmware<I>(dev: &mut Device, i2c: &mut I) -> Result<(), I::Error>
 where
-    I: i2c::Write,
+    I: I2c,
 {
     set_entry!(dev.data.ll.sys_ctrl.firmware__enable, i2c, 0x00)
 }
 
 fn disable_powerforce<I>(dev: &mut Device, i2c: &mut I) -> Result<(), I::Error>
 where
-    I: i2c::Write,
+    I: I2c,
 {
     set_entry!(
         dev.data.ll.sys_ctrl.power_management__go1_power_force,
@@ -1688,14 +1684,14 @@ where
 
 fn enable_firmware<I>(dev: &mut Device, i2c: &mut I) -> Result<(), I::Error>
 where
-    I: i2c::Write,
+    I: I2c,
 {
     set_entry!(dev.data.ll.sys_ctrl.firmware__enable, i2c, 0x01)
 }
 
 fn enable_powerforce<I>(dev: &mut Device, i2c: &mut I) -> Result<(), I::Error>
 where
-    I: i2c::Write,
+    I: I2c,
 {
     set_entry!(
         dev.data.ll.sys_ctrl.power_management__go1_power_force,
@@ -1719,7 +1715,7 @@ fn nvm_enable<I, D>(
     nvm_power_up_delay_us: i32,
 ) -> Result<(), I::Error>
 where
-    I: i2c::Write,
+    I: I2c,
     D: Delay,
 {
     disable_firmware(dev, i2c)?;
@@ -1763,7 +1759,7 @@ fn nvm_read<I, D, E>(
     mut data: &mut [u8],
 ) -> Result<(), E>
 where
-    I: i2c::Write<Error = E> + i2c::WriteRead<Error = E>,
+    I: I2c<Error = E>,
     D: Delay,
 {
     for nvm_addr in start_addr..start_addr + count {
@@ -1788,7 +1784,7 @@ where
 /// Power down NVM (OTP) to extend lifetime.
 fn nvm_disable<I>(dev: &mut Device, i2c: &mut I) -> Result<(), I::Error>
 where
-    I: i2c::Write,
+    I: I2c,
 {
     write_byte(i2c, reg::Index::RANGING_CORE__NVM_CTRL__READN, 0x01)?;
 
@@ -1812,7 +1808,7 @@ fn read_nvm_raw_data<I, D, E>(
     nvm_raw_data: &mut [u8],
 ) -> Result<(), E>
 where
-    I: i2c::Write<Error = E> + i2c::WriteRead<Error = E>,
+    I: I2c<Error = E>,
     D: Delay,
 {
     // Enable NVM and set control pulse width.
@@ -1840,7 +1836,7 @@ fn set_ref_spad_char_config<I>(
     fast_osc_frequency: u16,
 ) -> Result<(), I::Error>
 where
-    I: i2c::Write,
+    I: I2c,
 {
     // Update Macro Period for Range A VCSEL Period.
     let macro_period_us = calc_macro_period_us(fast_osc_frequency, vcsel_period_a);
@@ -1892,7 +1888,7 @@ where
 /// Triggers the start of a test mode.
 fn start_test<I>(i2c: &mut I, test_mode__ctrl: u8) -> Result<(), I::Error>
 where
-    I: i2c::Write,
+    I: I2c,
 {
     write_byte(i2c, reg::TEST_MODE__CTRL::INDEX, test_mode__ctrl)
 }
@@ -1901,7 +1897,7 @@ where
 /// determine the current state of output interrupt pin.
 fn is_new_data_ready<I>(dev: &mut Device, i2c: &mut I) -> Result<bool, I::Error>
 where
-    I: i2c::WriteRead,
+    I: I2c,
 {
     let gpio__mux_active_high_hv =
         dev.data.ll.stat_cfg.gpio_hv_mux__ctrl.0 & ll::device::DEVICEINTERRUPTLEVEL_ACTIVE_MASK;
@@ -1917,7 +1913,7 @@ fn wait_for_test_completion<I, D>(
     delay: &mut D,
 ) -> nb::Result<(), I::Error>
 where
-    I: i2c::WriteRead,
+    I: I2c,
     D: Delay,
 {
     if let WaitMethod::Blocking = dev.data.ll.wait_method {
@@ -1932,7 +1928,7 @@ where
 
 fn clear_interrupt<I>(dev: &mut Device, i2c: &mut I) -> Result<(), I::Error>
 where
-    I: i2c::Write,
+    I: I2c,
 {
     set_entry!(
         dev.data.ll.sys_ctrl.system__interrupt_clear,
@@ -1949,7 +1945,7 @@ fn run_device_test<I, D, E>(
     device_test_mode: u8,
 ) -> nb::Result<(), E>
 where
-    I: i2c::Write<Error = E> + i2c::WriteRead<Error = E>,
+    I: I2c<Error = E>,
     D: Delay,
 {
     // Get current interrupt config.
@@ -1988,7 +1984,7 @@ fn run_ref_spad_char<I, D, E>(
     delay: &mut D,
 ) -> nb::Result<Outcome<()>, E>
 where
-    I: i2c::Write<Error = E> + i2c::WriteRead<Error = E>,
+    I: I2c<Error = E>,
     D: Delay,
 {
     enable_powerforce(dev, i2c)?;
@@ -2622,7 +2618,7 @@ fn init_ll_driver_state(dev: &mut LlData, device_state: DeviceState) {
 
 fn read_p2p_data<I>(dev: &mut LlData, i2c: &mut I) -> Result<(), I::Error>
 where
-    I: i2c::WriteRead,
+    I: I2c,
 {
     dev.stat_nvm = Entries::read(i2c)?;
     dev.customer = Entries::read(i2c)?;
@@ -2755,7 +2751,7 @@ fn low_power_auto_data_init(low_power_auto_data: &mut LowPowerAutoData) {
 
 fn core_data_init<I>(dev: &mut LlData, i2c: &mut I, rd_p2p_data: u8) -> Result<(), Error<I::Error>>
 where
-    I: i2c::WriteRead,
+    I: I2c,
 {
     init_ll_driver_state(dev, DeviceState::UNKNOWN);
 
@@ -3232,7 +3228,7 @@ fn poll_for_boot_completion<I, D>(
     timeout_ms: u32,
 ) -> nb::Result<(), I::Error>
 where
-    I: i2c::WriteRead,
+    I: I2c,
     D: Delay,
 {
     d.delay_us(FIRMWARE_BOOT_TIME_US as u32);
@@ -3253,7 +3249,7 @@ fn poll_for_range_completion<I, D>(
     timeout_ms: u32,
 ) -> nb::Result<(), I::Error>
 where
-    I: i2c::WriteRead,
+    I: I2c,
     D: Delay,
 {
     let gpio__mux_active_high_hv =
@@ -3288,7 +3284,7 @@ fn wait_value_mask_ex<I, D>(
     poll_delay_ms: u32,
 ) -> nb::Result<(), I::Error>
 where
-    I: i2c::WriteRead,
+    I: I2c,
     D: Delay,
 {
     let attempts = timeout_ms / poll_delay_ms;
@@ -3493,7 +3489,7 @@ fn init_and_start_range<I>(
     mut device_config_level: DeviceConfigLevel,
 ) -> Result<(), I::Error>
 where
-    I: i2c::Write,
+    I: I2c,
 {
     // Save measurement mode.
     dev.data.ll.measurement_mode = measurement_mode;
@@ -3838,7 +3834,7 @@ fn get_measurement_results<I>(
     device_results_level: DeviceResultsLevel,
 ) -> Result<(), I::Error>
 where
-    I: i2c::WriteRead,
+    I: I2c,
 {
     // TODO: Original code does all this in one read which is probably slightly quicker.
     if device_results_level >= DeviceResultsLevel::FULL {
@@ -4031,7 +4027,7 @@ fn get_device_results<I>(
     device_results_level: DeviceResultsLevel,
 ) -> Result<RangeResults, Error<I::Error>>
 where
-    I: i2c::WriteRead,
+    I: I2c,
 {
     // Get device results.
     get_measurement_results(dev, i2c, device_results_level).map_err(Error::I2c)?;
@@ -4086,7 +4082,7 @@ where
 /// bits.
 fn stop_range<I>(dev: &mut Device, i2c: &mut I) -> Result<(), I::Error>
 where
-    I: i2c::Write,
+    I: I2c,
 {
     // Merge ABORT mode with mode_start.
     dev.data.ll.sys_ctrl.system__mode_start.0 = (dev.data.ll.sys_ctrl.system__mode_start.0
@@ -4111,7 +4107,7 @@ where
 
 fn change_preset_mode<I, D, E>(dev: &mut Device, i2c: &mut I, delay: &mut D) -> Result<(), Error<E>>
 where
-    I: i2c::Write<Error = E> + i2c::WriteRead<Error = E>,
+    I: I2c<Error = E>,
     D: Delay,
 {
     let user_zone = get_user_zone(dev);
@@ -4168,7 +4164,7 @@ fn clear_interrupt_and_enable_next_range<I>(
     measurement_mode: DeviceMeasurementMode,
 ) -> Result<(), I::Error>
 where
-    I: i2c::Write,
+    I: I2c,
 {
     init_and_start_range(
         dev,

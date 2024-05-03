@@ -1,4 +1,4 @@
-use embedded_hal::blocking::i2c;
+use embedded_hal::i2c::I2c;
 
 /// A struct of contiguous entries within the register map.
 pub trait Entries: Sized {
@@ -19,12 +19,12 @@ pub trait Entries: Sized {
     /// Implemented in terms of `write_to_slice`.
     fn write<I>(&self, i2c: &mut I) -> Result<(), I::Error>
     where
-        I: i2c::Write;
+        I: I2c;
 
     /// Read a new instance of the `Entries` struct from I2C.
     fn read<I>(i2c: &mut I) -> Result<Self, I::Error>
     where
-        I: i2c::WriteRead;
+        I: I2c;
 }
 
 /// Interpolates the register entries struct to generate I2C read/write methods.
@@ -57,7 +57,7 @@ macro_rules! entries_struct {
 
             fn write<I>(&self, i2c: &mut I) -> Result<(), I::Error>
             where
-                I: i2c::Write,
+                I: I2c,
             {
                 let mut bs = [0u8; Self::LEN_BYTES];
                 self.write_to_slice(&mut bs);
@@ -66,7 +66,7 @@ macro_rules! entries_struct {
 
             fn read<I>(i2c: &mut I) -> Result<Self, I::Error>
             where
-                I: i2c::WriteRead,
+                I: I2c,
             {
                 let mut bs = [0u8; Self::LEN_BYTES];
                 crate::read_slice(i2c, Self::INDEX, &mut bs).map(|()| {
